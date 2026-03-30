@@ -1,0 +1,22 @@
+# FastAPI + Streamlit 多轮对话 Web 应用依赖
+
+# Web 框架
+fastapi==0.109.0
+uvicorn[standard]==0.27.0
+streamlit==1.30.0
+
+# LangChain & AI
+langchain-openai==0.0.5
+langchain-core==0.1.20
+
+# HTTP 请求
+requests==2.31.0
+
+# Pydantic (FastAPI 依赖)
+pydantic==2.5.3
+
+# SSE 流式响应支持
+httpx>=0.26.0
+
+# CORS 支持（已包含在 FastAPI 中）
+# python-multipart==0.0.6  # 如需表单上传可启用
