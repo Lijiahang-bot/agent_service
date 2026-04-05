@@ -18,5 +18,15 @@ pydantic==2.5.3
 # SSE 流式响应支持
 httpx>=0.26.0
 
+# 知识库导入（多类型文件 → Ollama 嵌入 → Milvus Lite）
+ollama>=0.4.0
+pymilvus>=2.4.0
+# 知识库 Chroma 后端（Windows 等环境可改用 knowledge_base_chroma）
+chromadb>=0.4.0
+pandas>=2.0.0
+openpyxl>=3.1.0
+pypdf>=4.0.0
+langchain-text-splitters>=0.0.1
+
 # CORS 支持（已包含在 FastAPI 中）
-# python-multipart==0.0.6  # 如需表单上传可启用
+python-multipart>=0.0.6

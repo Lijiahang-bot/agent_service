@@ -3,15 +3,16 @@
 import subprocess
 import sys
 import time
-import os
+
+from models import ENV_DASHSCOPE_API_KEY, get_dashscope_api_key
 
 
 def check_env():
     """检查环境变量配置"""
-    if not os.getenv("DASHSCOPE_API_KEY"):
-        print("⚠️  警告：未设置 DASHSCOPE_API_KEY 环境变量")
+    if get_dashscope_api_key() is None:
+        print(f"⚠️  警告：未设置 {ENV_DASHSCOPE_API_KEY} 环境变量")
         print("请设置环境变量后重新启动：")
-        print("  Windows PowerShell: $env:DASHSCOPE_API_KEY=\"your-api-key\"")
+        print(f'  Windows PowerShell: $env:{ENV_DASHSCOPE_API_KEY}="your-api-key"')
         print("  或在代码中直接配置 API Key")
         print()
 

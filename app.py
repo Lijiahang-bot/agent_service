@@ -1,8 +1,14 @@
 # -*- coding: utf-8 -*-
 """Streamlit 前端界面：简洁美观的多轮对话 Web 应用，支持流式响应"""
-import streamlit as st
-import requests
+import html
 import time
+from typing import Optional
+from urllib.parse import quote
+
+import requests
+import streamlit as st
+
+from models import get_api_base_url
 
 # 页面配置
 st.set_page_config(
@@ -12,106 +18,140 @@ st.set_page_config(
     initial_sidebar_state="expanded"
 )
 
-# API 配置
-API_BASE_URL = "http://localhost:8000"
+# API 配置（可用环境变量 API_BASE_URL 覆盖，见 models）
+API_BASE_URL = get_api_base_url()
 
 # 自定义 CSS 样式
 st.markdown("""
 <style>
-/* 全局样式 - 使用更柔和的背景和清晰的字体 */
+/* 全局样式 */
 .stApp {
-    background: linear-gradient(135deg, #1a1a1a 0%, #2d2d2d 100%);
+    background: radial-gradient(circle at 10% 20%, #2a2a34 0%, #17171f 45%, #121218 100%);
     font-family: 'Segoe UI', 'Microsoft YaHei', sans-serif;
+    color: #e8e8ee;
 }
 
-/* 主容器背景 - 使用浅灰色而不是白色 */
-[data-testid="stVerticalBlock"] > div:first-child {
-    background-color: rgba(245, 246, 250, 0.95);
-    border-radius: 20px;
-    margin: 20px auto;
-    max-width: 1200px;
-    box-shadow: 0 10px 40px rgba(0, 0, 0, 0.3);
+.block-container {
+    max-width: 1080px;
+    padding-top: 1.2rem;
+    padding-bottom: 1.4rem;
 }
 
-/* 聊天容器 */
-.chat-container {
-    max-width: 900px;
-    margin: 0 auto;
-    padding: 20px;
+/* 主面板 */
+.main-panel {
+    background: rgba(255, 255, 255, 0.06);
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    border-radius: 18px;
+    backdrop-filter: blur(10px);
+    -webkit-backdrop-filter: blur(10px);
+    box-shadow: 0 16px 42px rgba(0, 0, 0, 0.28);
+    padding: 1.2rem;
+    margin-bottom: 1rem;
+}
+
+.panel-title {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    color: #f6f7fb;
+    margin-bottom: 0.8rem;
+}
+
+.panel-title .left {
+    font-size: 1.05rem;
+    font-weight: 600;
+}
+
+.badge {
+    background: rgba(255, 255, 255, 0.12);
+    border: 1px solid rgba(255, 255, 255, 0.15);
+    border-radius: 999px;
+    padding: 0.24rem 0.7rem;
+    font-size: 0.8rem;
+    color: #f5f6fa;
+}
+
+.chat-scroll {
+    max-height: calc(100vh - 320px);
+    min-height: 320px;
+    overflow-y: auto;
+    padding-right: 0.4rem;
 }
 
 /* 消息气泡 - 用户消息 */
 .user-message {
-    background: linear-gradient(135deg, #1a1a1a 0%, #3d3d3d 100%);
+    background: linear-gradient(135deg, #5a67ff 0%, #7f5af0 100%);
     color: #ffffff;
-    padding: 14px 20px;
+    padding: 12px 16px;
     border-radius: 20px 20px 6px 20px;
-    margin: 12px 0;
+    margin: 10px 0;
     max-width: 80%;
     margin-left: auto;
     word-wrap: break-word;
-    font-size: 16px;
-    line-height: 1.6;
-    box-shadow: 0 4px 15px rgba(0, 0, 0, 0.3);
-    text-shadow: 0 1px 2px rgba(0, 0, 0, 0.2);
+    font-size: 15px;
+    line-height: 1.7;
+    box-shadow: 0 6px 18px rgba(70, 67, 255, 0.32);
 }
 
 /* 消息气泡 - AI 助手消息 */
 .assistant-message {
-    background-color: #f0f2f5;
-    color: #1a1a1a;
-    padding: 14px 20px;
+    background-color: rgba(255, 255, 255, 0.92);
+    color: #1d1f2e;
+    padding: 12px 16px;
     border-radius: 20px 20px 20px 6px;
-    margin: 12px 0;
+    margin: 10px 0;
     max-width: 80%;
-    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
+    box-shadow: 0 6px 18px rgba(0, 0, 0, 0.16);
     word-wrap: break-word;
-    font-size: 16px;
-    line-height: 1.6;
-    border-left: 4px solid #1a1a1a;
+    font-size: 15px;
+    line-height: 1.7;
+    border-left: 4px solid #7f5af0;
+}
+
+.assistant-message p, .user-message p {
+    margin: 0;
 }
 
 /* 输入框区域 */
 .stChatInput {
-    position: sticky;
-    bottom: 0;
-    background-color: rgba(255, 255, 255, 0.95);
-    padding: 20px 0;
-    border-top: 1px solid #e0e0e0;
+    background: rgba(255, 255, 255, 0.06);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    border-radius: 14px;
+    padding: 0.4rem;
 }
 
 /* 输入框样式增强 */
 .stChatInput input {
-    background-color: #ffffff;
-    color: #1a1a1a;
-    border: 2px solid #d0d0d0;
-    border-radius: 25px;
+    background-color: rgba(255, 255, 255, 0.95);
+    color: #1d1f2e;
+    border: 1px solid #ced0d8;
+    border-radius: 10px;
     padding: 12px 20px;
-    font-size: 16px;
+    font-size: 15px;
     transition: all 0.3s;
 }
 
 .stChatInput input:focus {
-    border-color: #1a1a1a;
-    box-shadow: 0 0 0 3px rgba(26, 26, 26, 0.15);
+    border-color: #6e56ff;
+    box-shadow: 0 0 0 3px rgba(110, 86, 255, 0.2);
 }
 
 /* 按钮样式 */
 .stButton > button {
-    background: linear-gradient(135deg, #1a1a1a 0%, #3d3d3d 100%);
+    background: linear-gradient(135deg, #4c57f7 0%, #7f5af0 100%);
     color: white;
     border: none;
-    padding: 12px 28px;
+    padding: 11px 22px;
     border-radius: 10px;
     font-weight: 600;
-    font-size: 15px;
+    font-size: 14px;
     transition: all 0.3s;
-    box-shadow: 0 4px 15px rgba(0, 0, 0, 0.3);
+    box-shadow: 0 8px 18px rgba(73, 62, 205, 0.35);
 }
 
 .stButton > button:hover {
-    transform: translateY(-2px);
-    box-shadow: 0 6px 20px rgba(0, 0, 0, 0.5);
+    transform: translateY(-1px);
+    box-shadow: 0 10px 22px rgba(73, 62, 205, 0.42);
 }
 
 .stButton > button:active {
@@ -120,12 +160,12 @@ st.markdown("""
 
 /* 侧边栏样式 */
 [data-testid="stSidebar"] {
-    background: linear-gradient(180deg, #f5f6fa 0%, #e8e9ed 100%);
-    color: #1a1a1a;
+    background: linear-gradient(180deg, #ffffff 0%, #f4f5fb 100%);
+    color: #1d1f2e;
 }
 
 [data-testid="stSidebar"] * {
-    color: #1a1a1a !important;
+    color: #1d1f2e !important;
 }
 
 [data-testid="stSidebar"] input {
@@ -138,7 +178,7 @@ st.markdown("""
 .main-title {
     text-align: center;
     color: #ffffff;
-    font-size: 2.8rem;
+    font-size: 2.5rem;
     font-weight: 700;
     margin-bottom: 10px;
     text-shadow: 0 3px 10px rgba(0, 0, 0, 0.3);
@@ -147,17 +187,17 @@ st.markdown("""
 
 .subtitle {
     text-align: center;
-    color: rgba(255, 255, 255, 0.9);
-    font-size: 1.2rem;
-    margin-bottom: 30px;
-    font-weight: 300;
+    color: rgba(246, 246, 250, 0.92);
+    font-size: 1.06rem;
+    margin-bottom: 22px;
+    font-weight: 400;
     text-shadow: 0 2px 5px rgba(0, 0, 0, 0.2);
 }
 
 /* Markdown 内容样式 */
 .stMarkdown {
-    color: #1a1a1a;
-    font-size: 16px;
+    color: #f2f3f8;
+    font-size: 15px;
 }
 
 .stMarkdown p {
@@ -167,43 +207,47 @@ st.markdown("""
 
 /* 侧边栏内的 Markdown 使用深色 */
 [data-testid="stSidebar"] .stMarkdown {
-    color: #1a1a1a;
+    color: #1d1f2e;
 }
 
 /* Info 提示框样式 */
 .stAlert {
-    background-color: rgba(26, 26, 26, 0.1);
-    border: 2px solid #1a1a1a;
+    background-color: rgba(255, 255, 255, 0.12);
+    border: 1px solid rgba(255, 255, 255, 0.2);
     border-radius: 10px;
-    color: #1a1a1a;
+    color: #f2f3f8;
 }
 
 /* 侧边栏内的警告框使用不同配色 */
 [data-testid="stSidebar"] .stAlert {
-    background-color: rgba(255, 255, 255, 0.1);
-    border-color: rgba(255, 255, 255, 0.3);
-    color: #ffffff;
+    background-color: #ffffff;
+    border-color: #e5e8f2;
+    color: #1d1f2e;
 }
 
 /* Spinner 加载动画 */
 .stSpinner > div {
-    border-top-color: #1a1a1a;
+    border-top-color: #6e56ff;
 }
 
 /* 响应式调整 */
 @media (max-width: 768px) {
     .user-message, .assistant-message {
-        max-width: 90%;
+        max-width: 94%;
         font-size: 15px;
         padding: 12px 16px;
     }
     
     .main-title {
-        font-size: 2.2rem;
+        font-size: 2rem;
     }
     
     .subtitle {
-        font-size: 1rem;
+        font-size: 0.95rem;
+    }
+
+    .chat-scroll {
+        max-height: calc(100vh - 280px);
     }
 }
 
@@ -219,17 +263,17 @@ st.markdown("""
 }
 
 ::-webkit-scrollbar-thumb {
-    background: linear-gradient(135deg, #1a1a1a 0%, #3d3d3d 100%);
+    background: linear-gradient(135deg, #4c57f7 0%, #7f5af0 100%);
     border-radius: 4px;
 }
 
 ::-webkit-scrollbar-thumb:hover {
-    background: #764ba2;
+    background: #6d4be4;
 }
 
 /* 开关控件样式 */
 .stToggle > label {
-    color: #1a1a1a !important;
+    color: #1d1f2e !important;
     font-weight: 600;
 }
 
@@ -238,22 +282,54 @@ st.markdown("""
 }
 
 .stToggle [data-baseweb="toggle"][aria-checked="true"] {
-    background-color: #1a1a1a !important;
+    background-color: #4c57f7 !important;
 }
 </style>
 """, unsafe_allow_html=True)
 
 
-def send_message(message: str, session_id: str, history: list) -> tuple:
+def _chat_json_body(
+    message: str,
+    session_id: str,
+    history: list,
+    rag_collection: Optional[str],
+    rag_top_n: int,
+    rag_similarity_threshold: float,
+) -> dict:
+    body = {
+        "message": message,
+        "session_id": session_id,
+        "history": history,
+        "rag_top_n": int(rag_top_n),
+        "rag_similarity_threshold": float(rag_similarity_threshold),
+    }
+    if rag_collection is not None and str(rag_collection).strip() != "":
+        body["rag_collection"] = str(rag_collection).strip()
+    else:
+        body["rag_collection"] = None
+    return body
+
+
+def send_message(
+    message: str,
+    session_id: str,
+    history: list,
+    rag_collection: Optional[str] = None,
+    rag_top_n: int = 5,
+    rag_similarity_threshold: float = 0.0,
+) -> tuple:
     """发送消息到后端 API（非流式）"""
     try:
         response = requests.post(
             f"{API_BASE_URL}/chat",
-            json={
-                "message": message,
-                "session_id": session_id,
-                "history": history
-            },
+            json=_chat_json_body(
+                message,
+                session_id,
+                history,
+                rag_collection,
+                rag_top_n,
+                rag_similarity_threshold,
+            ),
             timeout=60
         )
         response.raise_for_status()
@@ -265,17 +341,28 @@ def send_message(message: str, session_id: str, history: list) -> tuple:
         return f"❌ 发生错误：{str(e)}", []
 
 
-def send_message_stream(message: str, session_id: str, history: list, placeholder) -> tuple:
+def send_message_stream(
+    message: str,
+    session_id: str,
+    history: list,
+    placeholder,
+    rag_collection: Optional[str] = None,
+    rag_top_n: int = 5,
+    rag_similarity_threshold: float = 0.0,
+) -> tuple:
     """发送消息到后端 API（流式模式）"""
     full_reply = ""
     try:
         with requests.post(
             f"{API_BASE_URL}/chat/stream",
-            json={
-                "message": message,
-                "session_id": session_id,
-                "history": history
-            },
+            json=_chat_json_body(
+                message,
+                session_id,
+                history,
+                rag_collection,
+                rag_top_n,
+                rag_similarity_threshold,
+            ),
             stream=True,
             timeout=120
         ) as response:
@@ -308,8 +395,8 @@ def send_message_stream(message: str, session_id: str, history: list, placeholde
                 unsafe_allow_html=True
             )
             
-            # 更新历史（从后端获取完整历史）
             new_history = list(history)
+            new_history.append({"role": "user", "content": message})
             new_history.append({"role": "assistant", "content": full_reply})
             return full_reply, new_history
             
@@ -319,20 +406,115 @@ def send_message_stream(message: str, session_id: str, history: list, placeholde
         return f"❌ 发生错误：{str(e)}", history
 
 
+def kb_fetch_collections() -> list:
+    """GET /kb_chroma/collections"""
+    r = requests.get(f"{API_BASE_URL}/kb_chroma/collections", timeout=60)
+    r.raise_for_status()
+    data = r.json()
+    cols = data.get("collections")
+    if cols is None:
+        return []
+    return cols
+
+
+def kb_create_collection(name: str) -> tuple[bool, str]:
+    """POST /kb_chroma/collections，返回 (成功, 消息或知识库名)"""
+    r = requests.post(
+        f"{API_BASE_URL}/kb_chroma/collections",
+        json={"name": name},
+        timeout=60,
+    )
+    if r.status_code == 409:
+        detail = r.json().get("detail", "知识库已存在")
+        return False, str(detail)
+    if r.status_code != 200:
+        try:
+            detail = r.json().get("detail", r.text)
+        except Exception:
+            detail = r.text
+        return False, str(detail)
+    j = r.json()
+    created = j.get("name", name)
+    return True, created
+
+
+def kb_fetch_sources(collection_name: str) -> tuple[bool, str, list]:
+    """GET .../sources，返回 (成功, 错误信息, 文件列表)"""
+    enc = quote(collection_name, safe="")
+    r = requests.get(
+        f"{API_BASE_URL}/kb_chroma/collections/{enc}/sources",
+        timeout=120,
+    )
+    if r.status_code == 404:
+        return False, r.json().get("detail", "知识库不存在"), []
+    if r.status_code != 200:
+        try:
+            detail = r.json().get("detail", r.text)
+        except Exception:
+            detail = r.text
+        return False, str(detail), []
+    data = r.json()
+    files = data.get("files")
+    if files is None:
+        files = []
+    return True, "", files
+
+
+def kb_import_file(
+    collection_name: str,
+    filename: str,
+    file_bytes: bytes,
+    chunk_size: int,
+    chunk_overlap: int,
+) -> tuple[bool, str]:
+    """POST /kb_chroma/import（multipart）"""
+    files = {
+        "file": (
+            filename,
+            file_bytes,
+            "application/octet-stream",
+        )
+    }
+    data = {
+        "collection_name": collection_name,
+        "chunk_size": str(chunk_size),
+        "chunk_overlap": str(chunk_overlap),
+    }
+    r = requests.post(
+        f"{API_BASE_URL}/kb_chroma/import",
+        files=files,
+        data=data,
+        timeout=600,
+    )
+    if r.status_code != 200:
+        try:
+            detail = r.json().get("detail", r.text)
+        except Exception:
+            detail = r.text
+        return False, str(detail)
+    j = r.json()
+    msg = (
+        f"已导入「{j.get('filename', filename)}」至知识库「{j.get('collection', collection_name)}」"
+        f"，分块 {j.get('chunks', '?')}，写入 {j.get('inserted', '?')} 条。"
+    )
+    return True, msg
+
+
 def main():
     """主函数"""
-    # 标题区域 - 使用渐变背景
+    # 标题区域
     st.markdown("""
     <div style="
-        background: linear-gradient(135deg, #1a1a1a 0%, #3d3d3d 100%);
-        padding: 40px 20px 30px;
-        margin: -20px -20px 30px -20px;
-        border-radius: 0 0 30px 30px;
-        box-shadow: 0 4px 20px rgba(0, 0, 0, 0.3);
+        background: linear-gradient(135deg, rgba(76, 87, 247, 0.95) 0%, rgba(127, 90, 240, 0.95) 55%, rgba(24, 24, 32, 0.95) 100%);
+        padding: 30px 24px 24px;
+        margin: -8px 0 16px 0;
+        border-radius: 16px;
+        border: 1px solid rgba(255,255,255,0.15);
+        box-shadow: 0 12px 30px rgba(0, 0, 0, 0.28);
     ">
         <div style="text-align: center;">
             <div class="main-title">🤖 AI 智能助手</div>
-            <div class="subtitle">基于通义千问的多轮对话系统</div>
+            <div class="subtitle">更清晰的多轮对话体验 · 支持流式输出</div>
         </div>
     </div>
     """, unsafe_allow_html=True)
@@ -372,6 +554,138 @@ def main():
             
             st.divider()
             
+            # 知识库（Chroma）
+            st.markdown(
+                '### <span style="color: black; font-weight: 600;">📚 知识库（Chroma）</span>',
+                unsafe_allow_html=True,
+            )
+            st.caption("创建知识库后可导入 txt / md / csv / xlsx / pdf 等文件（依赖后端 Ollama 嵌入）")
+
+            _kb_ok_flash = st.session_state.pop("kb_flash_success", None)
+            if _kb_ok_flash is not None:
+                st.success(_kb_ok_flash)
+            _kb_err_flash = st.session_state.pop("kb_flash_error", None)
+            if _kb_err_flash is not None:
+                st.error(_kb_err_flash)
+
+            new_kb_name = st.text_input(
+                "新建知识库名称",
+                key="kb_new_name_input",
+                placeholder="例如：产品说明",
+            )
+            if st.button("创建知识库", use_container_width=True, key="kb_create_btn"):
+                trimmed = (new_kb_name or "").strip()
+                if not trimmed:
+                    st.warning("请输入知识库名称")
+                else:
+                    try:
+                        ok, info = kb_create_collection(trimmed)
+                        if ok:
+                            st.session_state["kb_selected"] = info
+                            st.session_state["kb_new_name_input"] = ""
+                            st.session_state["kb_flash_success"] = f"已创建知识库：{info}"
+                            st.rerun()
+                        else:
+                            st.error(f"创建失败：{info}")
+                    except requests.exceptions.ConnectionError:
+                        st.error("无法连接后端，请确认已启动 main.py")
+                    except Exception as e:
+                        st.error(f"创建失败：{e}")
+
+            kb_collections: list = []
+            try:
+                kb_collections = kb_fetch_collections()
+            except requests.exceptions.ConnectionError:
+                st.warning("无法加载知识库列表（后端未连接）")
+            except Exception as e:
+                st.warning(f"加载知识库列表失败：{e}")
+
+            if kb_collections:
+                names = [c["name"] for c in kb_collections]
+                pref = st.session_state.get("kb_selected")
+                if pref is not None and pref in names:
+                    sel_index = names.index(pref)
+                else:
+                    sel_index = 0
+                kb_selected = st.selectbox(
+                    "当前知识库",
+                    options=names,
+                    index=sel_index,
+                )
+                st.session_state["kb_selected"] = kb_selected
+
+                doc_count = next(
+                    (c["document_count"] for c in kb_collections if c["name"] == kb_selected),
+                    0,
+                )
+                st.markdown(
+                    f'<p style="color:#1a1a1a;font-size:14px;margin:6px 0;">'
+                    f'已选：<strong>{html.escape(kb_selected)}</strong> · 分块总数约 <strong>{doc_count}</strong></p>',
+                    unsafe_allow_html=True,
+                )
+
+                ok_src, err_src, file_rows = kb_fetch_sources(kb_selected)
+                if ok_src:
+                    if file_rows:
+                        st.markdown('<span style="color:#1a1a1a;font-weight:600;">已导入文件</span>', unsafe_allow_html=True)
+                        for row in file_rows:
+                            fn = row.get("filename", "")
+                            ch = row.get("chunks", 0)
+                            st.caption(f"· {fn}（{ch} 块）")
+                    else:
+                        st.caption("该知识库下暂无已导入文件")
+                else:
+                    st.caption(f"无法列出文件：{err_src}")
+
+                st.markdown('<span style="color:#1a1a1a;font-weight:600;">导入文件</span>', unsafe_allow_html=True)
+                kb_chunk_size = st.number_input(
+                    "chunk_size（单块最大字符数）",
+                    min_value=100,
+                    max_value=32000,
+                    value=800,
+                    key="kb_chunk_size",
+                )
+                kb_chunk_overlap = st.number_input(
+                    "chunk_overlap（块重叠字符数，须小于 chunk_size）",
+                    min_value=0,
+                    value=100,
+                    key="kb_chunk_overlap",
+                )
+                kb_upload = st.file_uploader(
+                    "选择文件",
+                    type=["txt", "md", "markdown", "csv", "xlsx", "xls", "pdf"],
+                    key="kb_file_uploader",
+                )
+                if st.button("导入到当前知识库", use_container_width=True, key="kb_import_btn"):
+                    if kb_upload is None:
+                        st.warning("请先选择要导入的文件")
+                    elif kb_chunk_overlap >= kb_chunk_size:
+                        st.warning("chunk_overlap 必须小于 chunk_size")
+                    else:
+                        try:
+                            raw = kb_upload.getvalue()
+                            with st.spinner("正在解析、分块并向量化，请稍候…"):
+                                imp_ok, imp_msg = kb_import_file(
+                                    kb_selected,
+                                    kb_upload.name,
+                                    raw,
+                                    int(kb_chunk_size),
+                                    int(kb_chunk_overlap),
+                                )
+                            if imp_ok:
+                                st.session_state["kb_flash_success"] = imp_msg
+                                st.rerun()
+                            else:
+                                st.error(f"导入失败：{imp_msg}")
+                        except requests.exceptions.ConnectionError:
+                            st.error("无法连接后端，请确认已启动 main.py")
+                        except Exception as e:
+                            st.error(f"导入失败：{e}")
+            else:
+                st.info("暂无知识库，请先输入名称并点击「创建知识库」")
+
+            st.divider()
+            
             # 使用说明
             st.markdown('### <span style="color: black; font-weight: 600;">📖 使用说明</span>', unsafe_allow_html=True)
             st.markdown("""
@@ -380,7 +694,8 @@ def main():
             - 🔄 支持多轮对话，AI 会记住上下文<br>
             - 📝 滑动窗口自动保留最近 10 条消息<br>
             - ⚡ 流式响应模式：逐字显示 AI 回复，体验更流畅<br>
-            - ⚙️ 可通过会话 ID 管理不同对话
+            - ⚙️ 可通过会话 ID 管理不同对话<br>
+            - 📎 主界面可选择知识库开启 RAG，并可调 TOP N 与相似度阈值
             </div>
             """, unsafe_allow_html=True)
             
@@ -407,18 +722,60 @@ def main():
         st.session_state.history = []
     if "use_streaming" not in st.session_state:
         st.session_state.use_streaming = True  # 默认开启流式响应
+
+    try:
+        _rag_cols_list = kb_fetch_collections()
+        _rag_names_for_chat = [c["name"] for c in _rag_cols_list]
+    except Exception:
+        _rag_names_for_chat = []
+
+    _rag_select_options = ["（不使用知识库）"] + _rag_names_for_chat
+    st.markdown(
+        '<div style="color:#f2f3f8;font-size:1rem;font-weight:600;margin-bottom:8px;">'
+        "对话与检索（RAG）</div>",
+        unsafe_allow_html=True,
+    )
+    rag_col1, rag_col2, rag_col3 = st.columns([1.5, 0.75, 1.0])
+    with rag_col1:
+        _rag_pick = st.selectbox(
+            "本对话使用的知识库",
+            options=_rag_select_options,
+            index=0,
+            help="默认不选为普通对话；选定后每轮从该库检索文档块再结合历史回答",
+            key="main_rag_kb_select",
+        )
+    chat_rag_collection: Optional[str] = None
+    if _rag_pick != "（不使用知识库）":
+        chat_rag_collection = _rag_pick
+    with rag_col2:
+        chat_rag_top_n = st.number_input(
+            "TOP N",
+            min_value=1,
+            max_value=50,
+            value=5,
+            disabled=chat_rag_collection is None,
+            help="最多检索的候选块数量",
+            key="main_rag_top_n",
+        )
+    with rag_col3:
+        chat_rag_sim = st.slider(
+            "相似度阈值",
+            min_value=0.0,
+            max_value=1.0,
+            value=0.0,
+            step=0.05,
+            disabled=chat_rag_collection is None,
+            help="0：仅按相似度排序取 TOP N；大于 0：只保留相似度≥该值的块（相似度≈1−Chroma 距离）",
+            key="main_rag_sim_threshold",
+        )
+    st.markdown("---")
     
-    # 聊天消息显示区域 - 使用浅灰色背景容器
+    # 聊天消息显示区域
+    message_count = len(st.session_state.messages)
     st.markdown("""
-    <div style="
-        background-color: #f5f6fa;
-        border-radius: 20px;
-        padding: 30px;
-        margin: 20px auto;
-        max-width: 1000px;
-        box-shadow: 0 10px 40px rgba(0, 0, 0, 0.1);
-        min-height: 400px;
-    ">
+    <div class="panel-title">
+        <div class="left">对话窗口</div>
+        <div class="badge">最近消息会被持续记忆</div>
     </div>
     """, unsafe_allow_html=True)
     
@@ -428,7 +785,7 @@ def main():
             for msg in st.session_state.messages:
                 if msg["role"] == "user":
                     st.markdown(
-                        f'<div class="user-message">{msg["content"]}</div>',
+                        f'<div class="user-message">{html.escape(msg["content"])}</div>',
                         unsafe_allow_html=True
                     )
                 else:
@@ -437,42 +794,41 @@ def main():
                         unsafe_allow_html=True
                     )
         else:
-            # 欢迎消息 - 使用更清晰的样式
+            # 欢迎消息
             st.markdown("""
             <div style="
-                background: linear-gradient(135deg, rgba(26, 26, 26, 0.15) 0%, rgba(61, 61, 61, 0.15) 100%);
-                border-left: 5px solid #1a1a1a;
-                padding: 20px;
-                border-radius: 10px;
-                margin: 20px auto;
-                max-width: 600px;
-                text-align: center;
-                color: #1a1a1a;
-                font-size: 18px;
+                background: rgba(255, 255, 255, 0.92);
+                border: 1px solid #dce0ee;
+                padding: 18px;
+                border-radius: 12px;
+                margin: 16px auto;
+                max-width: 680px;
+                color: #1d1f2e;
                 line-height: 1.8;
-                box-shadow: 0 2px 10px rgba(0, 0, 0, 0.08);
+                box-shadow: 0 8px 24px rgba(0, 0, 0, 0.1);
             ">
-            💡 开始提问吧！我会记住我们的对话内容。
+                <div style="font-size: 18px; font-weight: 600; margin-bottom: 8px;">欢迎使用 AI 智能助手</div>
+                <div style="font-size: 15px;">输入任何问题即可开始，我会记住当前会话的上下文并连续回答。</div>
             </div>
             """, unsafe_allow_html=True)
     
-    # 聊天输入区域 - 使用浅灰色背景容器
-    st.markdown("""
+    st.markdown(f"""
     <div style="
-        background-color: #f5f6fa;
-        border-radius: 20px;
-        padding: 20px 30px;
-        margin: 20px auto;
-        max-width: 1000px;
-        box-shadow: 0 10px 40px rgba(0, 0, 0, 0.1);
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        margin-top: 0.55rem;
+        margin-bottom: 0.45rem;
+        color: rgba(243, 244, 252, 0.92);
+        font-size: 13px;
     ">
+        <span>当前消息数：{message_count}</span>
+        <span>输入后按 Enter 发送</span>
     </div>
     """, unsafe_allow_html=True)
     
-    st.divider()
-    
     # 使用列布局使输入框更美观
-    input_col1, input_col2 = st.columns([5, 1])
+    input_col1, _ = st.columns([10, 1])
     
     with input_col1:
         user_input = st.chat_input("输入您的问题...", key="chat_input")
@@ -493,14 +849,20 @@ def main():
                     user_input,
                     session_id,
                     st.session_state.history,
-                    placeholder
+                    placeholder,
+                    rag_collection=chat_rag_collection,
+                    rag_top_n=int(chat_rag_top_n),
+                    rag_similarity_threshold=float(chat_rag_sim),
                 )
             else:
                 # 普通模式
                 reply, new_history = send_message(
                     user_input,
                     session_id,
-                    st.session_state.history
+                    st.session_state.history,
+                    rag_collection=chat_rag_collection,
+                    rag_top_n=int(chat_rag_top_n),
+                    rag_similarity_threshold=float(chat_rag_sim),
                 )
         
         # 更新历史和消息
